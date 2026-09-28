@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>귀여운 꼬마 비행기 모험 (Kids 1942)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Jua', sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+        .game-canvas-container {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-b from-sky-300 to-indigo-500 min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 text-gray-800">
+
+    <div class="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl p-4 mb-3 shadow-lg flex justify-between items-center border-4 border-yellow-300">
+        <div class="flex items-center space-x-2">
+            <span class="text-3xl">✈️</span>
+            <div>
+                <h1 class="text-xl font-bold text-sky-600 leading-tight">하늘을 나는 꼬마 비행기</h1>
+                <p class="text-xs text-gray-500">조심조심 적들을 피해 별을 모아요!</p>
+            </div>
+        </div>
+        <div class="text-right">
+            <div class="text-sm text-gray-500 font-bold">점수</div>
+            <div id="scoreDisplay" class="text-2xl font-black text-amber-500">0</div>
+        </div>
+    </div>
+
+    <div class="relative w-full max-w-md aspect-[3/4] bg-sky-200 rounded-3xl overflow-hidden game-canvas-container border-8 border-white">
+        <canvas id="gameCanvas" class="w-full h-full block cursor-pointer"></canvas>
+
+        <!-- Start Overlay Screen -->
+        <div id="startScreen" class="absolute inset-0 bg-black/50 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 z-20 text-center">
+            <div class="text-6xl mb-4 animate-bounce">🐥✈️☁️</div>
+            <h2 class="text-3xl font-bold mb-2 text-yellow-300 drop-shadow">귀여운 비행기 모험!</h2>
+            <p class="text-sm mb-6 text-sky-100 max-w-xs">화면을 손가락이나 마우스로 누르고 움직여서 귀여운 비행기를 조종하세요. 자동으로 총알이 나갑니다!</p>
+            <button onclick="startGame()" class="bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-purple-900 font-black text-2xl px-8 py-4 rounded-full shadow-xl transform active:scale-95 transition border-4 border-white">
+                게임 시작하기! 🚀
+            </button>
+        </div>
+
+        <!-- Game Over Overlay Screen -->
+        <div id="gameOverScreen" class="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 z-20 text-center hidden">
+            <div class="text-6xl mb-3">💫</div>
+                <h2 class="text-3xl font-bold mb-1 text-pink-300">앗, 비행기가 부딪혔어요!</h2>
+                <p id="finalScore" class="text-xl mb-4 text-yellow-200">획득한 별: 0점</p>
+                <button onclick="startGame()" class="bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-300 hover:to-emerald-400 text-white font-black text-xl px-8 py-3 rounded-full shadow-xl transform active:scale-95 transition border-4 border-white">
+                    다시 도전하기! 🔄
+                </button>
+        </div>
+    </div>
+
+    <div class="w-full max-w-md mt-3 bg-white/80 backdrop-blur rounded-xl p-3 text-center text-sm font-bold text-sky-700 shadow flex justify-around items-center">
+        <span>👈 터치하고 움직이기 👉</span>
+        <span>✨ 별을 모아요!</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Adjust canvas resolution for crisp display
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        let gameState = 'START'; // START, PLAYING, GAMEOVER
+        let score = 0;
+        let animationFrameId;
+
+        // Player object (Cute chick pilot airplane)
+        let player = {
+            x: 0,
+            y: 0,
+            w: 48,
+            h: 48,
+            speed: 5,
+            targetX: 0,
+            targetY: 0,
+            isMoving: false
+        };
+
+        let bullets = [];
+        let enemies = [];
+        let stars = [];
+        let particles = [];
+        let clouds = [];
+
+        let frameCount = 0;
+
+        // Initialize background clouds
+        function initClouds() {
+            clouds = [];
+            for (let i = 0; i < 6; i++) {
+                clouds.push({
+                    x: Math.random() * (canvas.width / window.devicePixelRatio),
+                    y: Math.random() * (canvas.height / window.devicePixelRatio),
+                    r: 20 + Math.random() * 30,
+                    speed: 0.5 + Math.random() * 1
+                });
+            }
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            
+            const clientWidth = canvas.width / window.devicePixelRatio;
+            const clientHeight = canvas.height / window.devicePixelRatio;
+
+            player.x = clientWidth / 2 - player.w / 2;
+            player.y = clientHeight - 100;
+            player.targetX = player.x;
+            player.targetY = player.y;
+
+            score = 0;
+            document.getElementById('scoreDisplay').innerText = score;
+            bullets = [];
+            enemies = [];
+            stars = [];
+            particles = [];
+            initClouds();
+
+            gameState = 'PLAYING';
+            cancelAnimationFrame(animationFrameId);
+            gameLoop();
+        }
+
+        // Touch and Mouse Handling for Drag-to-Move
+        let isPointerDown = false;
+
+        function handlePointerStart(e) {
+            if (gameState !== 'PLAYING') return;
+            isPointerDown = true;
+            updatePointerPos(e);
+        }
+
+        function handlePointerMove(e) {
+            if (!isPointerDown || gameState !== 'PLAYING') return;
+            updatePointerPos(e);
+        }
+
+        function handlePointerEnd() {
+            isPointerDown = false;
+        }
+
+        function updatePointerPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            player.targetX = (clientX - rect.left) - player.w / 2;
+            player.targetY = (clientY - rect.top) - player.h / 2;
+        }
+
+        canvas.addEventListener('mousedown', handlePointerStart);
+        window.addEventListener('mousemove', handlePointerMove);
+        window.addEventListener('mouseup', handlePointerEnd);
+
+        canvas.addEventListener('touchstart', handlePointerStart, {passive: true});
+        window.addEventListener('touchmove', handlePointerMove, {passive: true});
+        window.addEventListener('touchend', handlePointerEnd);
+
+        function spawnEnemy() {
+            const clientWidth = canvas.width / window.devicePixelRatio;
+            const types = ['balloon', 'cloudMonster', 'starBubble'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            
+            enemies.push({
+                x: Math.random() * (clientWidth - 40),
+                y: -50,
+                w: 42,
+                h: 42,
+                speed: 1.5 + Math.random() * 1.5,
+                type: type,
+                hp: type === 'cloudMonster' ? 2 : 1
+            });
+        }
+
+        function spawnStar(x, y) {
+            stars.push({
+                x: x,
+                y: y,
+                w: 24,
+                h: 24,
+                speed: 2
+            });
+        }
+
+        function addExplosion(x, y, color) {
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    r: 4 + Math.random() * 4,
+                    color: color,
+                    alpha: 1
+                });
+            }
+        }
+
+        function gameLoop() {
+            if (gameState !== 'PLAYING') return;
+
+            const clientWidth = canvas.width / window.devicePixelRatio;
+            const clientHeight = canvas.height / window.devicePixelRatio;
+
+            frameCount++;
+
+            // Clear screen
+            ctx.clearRect(0, 0, clientWidth, clientHeight);
+
+            // 1. Update & Draw Clouds (Background)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            clouds.forEach(cloud => {
+                cloud.y += cloud.speed;
+                if (cloud.y > clientHeight + 50) cloud.y = -50;
+                
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, cloud.r, 0, Math.PI * 2);
+                ctx.arc(cloud.x + cloud.r * 0.6, cloud.y - cloud.r * 0.2, cloud.r * 0.7, 0, Math.PI * 2);
+                ctx.arc(cloud.x - cloud.r * 0.6, cloud.y - cloud.r * 0.2, cloud.r * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 2. Smooth player movement towards target position
+            player.x += (player.targetX - player.x) * 0.2;
+            player.y += (player.targetY - player.y) * 0.2;
+
+            // Constrain player within canvas bounds
+            player.x = Math.max(10, Math.min(clientWidth - player.w - 10, player.x));
+            player.y = Math.max(10, Math.min(clientHeight - player.h - 10, player.y));
+
+            // Automatic shooting (Kid-friendly: shoots bullets frequently)
+            if (frameCount % 20 === 0) {
+                bullets.push({
+                    x: player.x + player.w / 2 - 4,
+                    y: player.y,
+                    w: 8,
+                    h: 16,
+                    speed: 8
+                });
+            }
+
+            // Spawn enemies
+            if (frameCount % 65 === 0) {
+                spawnEnemy();
+            }
+
+            // 3. Update & Draw Bullets
+            ctx.fillStyle = '#fde047';
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.y -= b.speed;
+
+                // Draw star-shaped or round bullet
+                ctx.beginPath();
+                ctx.arc(b.x + b.w/2, b.y + b.h/2, b.w, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (b.y < -20) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // 4. Update & Draw Enemies
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                e.y += e.speed;
+
+                // Draw Cute Enemy Icon/Graphic
+                ctx.font = '36px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                let enemyEmoji = '🎈';
+                if (e.type === 'cloudMonster') enemyEmoji = '☁️👾';
+                else if (e.type === 'starBubble') enemyEmoji = '🫧';
+
+                ctx.fillText(enemyEmoji, e.x + e.w/2, e.y + e.h/2);
+
+                // Check collision with bullets
+                let destroyed = false;
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    let b = bullets[j];
+                    if (
+                        b.x < e.x + e.w &&
+                        b.x + b.w > e.x &&
+                        b.y < e.y + e.h &&
+                        b.y + b.h > e.y
+                    ) {
+                        bullets.splice(j, 1);
+                        e.hp--;
+                        if (e.hp <= 0) {
+                            destroyed = true;
+                            score += 100;
+                            document.getElementById('scoreDisplay').innerText = score;
+                            addExplosion(e.x + e.w/2, e.y + e.h/2, '#f43f5e');
+                            spawnStar(e.x + e.w/2, e.y + e.h/2);
+                        }
+                        break;
+                    }
+                }
+
+                if (destroyed) {
+                    enemies.splice(i, 1);
+                    continue;
+                }
+
+                // Check collision with Player (Kids version: generous collision box or gentle bounce)
+                let dx = (player.x + player.w/2) - (e.x + e.w/2);
+                let dy = (player.y + player.h/2) - (e.y + e.h/2);
+                let dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 32) {
+                    // Game Over
+                    gameState = 'GAMEOVER';
+                    document.getElementById('finalScore').innerText = `획득한 점수: ${score}점`;
+                    document.getElementById('gameOverScreen').classList.remove('hidden');
+                    return;
+                }
+
+                if (e.y > clientHeight + 50) {
+                    enemies.splice(i, 1);
+                }
+            }
+
+            // 5. Update & Draw Collectible Stars
+            for (let i = stars.length - 1; i >= 0; i--) {
+                let s = stars[i];
+                s.y += s.speed;
+
+                ctx.font = '28px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('⭐', s.x, s.y);
+
+                // Check if player collects star
+                let dx = (player.x + player.w/2) - s.x;
+                let dy = (player.y + player.h/2) - s.y;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 35) {
+                    score += 50;
+                    document.getElementById('scoreDisplay').innerText = score;
+                    stars.splice(i, 1);
+                    continue;
+                }
+
+                if (s.y > clientHeight + 30) {
+                    stars.splice(i, 1);
+                }
+            }
+
+            // 6. Update & Draw Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.03;
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 7. Draw Player Airplane (Cute Chick in Plane)
+            ctx.font = '44px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🐥✈️', player.x + player.w / 2, player.y + player.h / 2);
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
